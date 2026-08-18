@@ -307,34 +307,49 @@ st.sidebar.markdown(
 st.sidebar.markdown("---")
 
 default_aed_rates = {
-    "AED": 1.0000,
-    "USD": 0.2723,    # 1 AED = 0.2723 USD (1 USD ~ 3.6725 AED)
-    "EUR": 0.2500,    # 1 AED ~ 0.2500 EUR
-    "SAR": 1.0210,    # 1 AED ~ 1.0210 SAR
-    "GBP": 0.2150,    # 1 AED ~ 0.2150 GBP
-    "INR": 22.7500,   # 1 AED ~ 22.7500 INR
-    "JPY": 43.3800    # 1 AED ~ 43.3800 JPY
+    "AED": {"rate_aed": 1.0000, "label": "UAE Dirham (AED)"},
+    "USD": {"rate_aed": 3.6725, "label": "US Dollar (USD)"},
+    "EUR": {"rate_aed": 4.0000, "label": "Euro (EUR)"},
+    "SAR": {"rate_aed": 0.9794, "label": "Saudi Riyal (SAR)"},
+    "GBP": {"rate_aed": 4.6500, "label": "British Pound (GBP)"},
+    "INR": {"rate_aed": 0.0440, "label": "Indian Rupee (INR)"},
+    "JPY": {"rate_aed": 0.0230, "label": "Japanese Yen (JPY)"},
+    "Custom / Other": {"rate_aed": 1.0000, "label": "Custom Currency"}
 }
 
-target_currency = st.sidebar.selectbox(
+curr_choice = st.sidebar.selectbox(
     "Target Quote Currency", 
     list(default_aed_rates.keys()), 
     index=0,
-    help="Master sheet input is in AED. Select the currency you want to quote to the customer."
+    help="Select the target currency for customer quotation."
 )
-suggested_rate = default_aed_rates.get(target_currency, 1.0000)
 
-if target_currency == "AED":
-    conversion_rate = 1.0000
-    st.sidebar.caption("🔒 Base Rate: 1 AED = 1.0000 AED")
+if curr_choice == "Custom / Other":
+    target_currency = st.sidebar.text_input("Enter Currency Code (e.g. QAR, KWD, OMR)", value="USD").upper().strip()
+    rate_aed = st.sidebar.number_input(
+        f"Exchange Rate (1 {target_currency} = ? AED)",
+        min_value=0.0001,
+        value=3.6725,
+        format="%.4f",
+        help=f"Enter how many AED equals 1 {target_currency}"
+    )
+elif curr_choice == "AED":
+    target_currency = "AED"
+    rate_aed = 1.0000
+    st.sidebar.caption("🔒 Base Currency: 1 AED = 1.0000 AED")
 else:
-    conversion_rate = st.sidebar.number_input(
-        f"Exchange Rate (1 AED = ? {target_currency})",
+    target_currency = curr_choice
+    suggested_rate = default_aed_rates[curr_choice]["rate_aed"]
+    rate_aed = st.sidebar.number_input(
+        f"Exchange Rate (1 {target_currency} = ? AED)",
         min_value=0.0001,
         value=float(suggested_rate),
         format="%.4f",
-        help="Adjust exchange rate multiplier from AED base"
+        help=f"Adjust current market rate: 1 {target_currency} = X AED"
     )
+
+# Conversion multiplier: 1 AED = (1 / rate_aed) Target Currency
+conversion_rate = (1.0 / rate_aed) if rate_aed > 0 else 1.0000
 
 margin = st.sidebar.number_input(
     "Profit Markup (%)", 
@@ -375,14 +390,23 @@ st.markdown(
 )
 
 # --- 6. FILE UPLOAD WORKSPACE ---
-matrix_file = st.file_uploader(
-    "📤 Drop your Consolidated Master Sheet (Excel or CSV)", 
-    type=["xlsx", "xls", "csv"], 
-    key="single_matrix",
-    help="Upload your vertical multi-supplier sheet with columns: si, Part No., Description, QTY, Now_available, NSP, cust_name."
-)
+col_up1, col_up2 = st.columns(2)
+with col_up1:
+    request_file = st.file_uploader(
+        "📋 Customer RFQ Sheet (c_request)",
+        type=["xlsx", "xls", "csv"],
+        key="customer_request",
+        help="Upload customer request sheet with columns: si, Part Number, Qty"
+    )
+with col_up2:
+    matrix_file = st.file_uploader(
+        "📦 Supplier Stock Matrix (c_s_matrix)",
+        type=["xlsx", "xls", "csv"],
+        key="supplier_matrix",
+        help="Upload supplier matrix with columns: si, Part, Ord Part, Desc, Reqd Qty, AVA, UNIT PRICE"
+    )
 
-if not matrix_file:
+if not request_file or not matrix_file:
     # Empty State - High-end Guidance Card
     st.markdown(
         """
@@ -390,10 +414,10 @@ if not matrix_file:
             <div style="font-size: 3rem; margin-bottom: 12px;">📂</div>
             <h3 style="font-size: 1.25rem; font-weight: 700; color: #0f172a; margin-bottom: 6px;">Ready to generate optimal quotes?</h3>
             <p style="font-size: 0.92rem; color: #64748b; max-width: 540px; margin: 0 auto 20px auto;">
-                Upload your supplier matrix above to automatically match part numbers, pick the best supplier rates, and export clean client-ready quotations.
+                Upload both the <b>Customer RFQ</b> and <b>Supplier Matrix</b> above to automatically match part numbers, pick the best supplier rates, and export clean client-ready quotations.
             </p>
             <div style="display: inline-flex; gap: 24px; text-align: left; background: #f8fafc; padding: 14px 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
-                <div><span style="font-weight: 700; color: #0f172a;">✔ Multi-Vendor Pooling</span><br><span style="font-size: 0.78rem; color: #64748b;">Splits quantities across best prices</span></div>
+                <div><span style="font-weight: 700; color: #0f172a;">✔ Smart Part Matching</span><br><span style="font-size: 0.78rem; color: #64748b;">Matches via Part No. & S/S interchange</span></div>
                 <div><span style="font-weight: 700; color: #0f172a;">✔ AED Currency Engine</span><br><span style="font-size: 0.78rem; color: #64748b;">Seamless conversion & margin markup</span></div>
                 <div><span style="font-weight: 700; color: #0f172a;">✔ Excel & CSV Export</span><br><span style="font-size: 0.78rem; color: #64748b;">Formatted tables with 1-click download</span></div>
             </div>
@@ -402,309 +426,356 @@ if not matrix_file:
         unsafe_allow_html=True
     )
 else:
-    file_ext = os.path.splitext(matrix_file.name)[1].lower()
+    # --- LOAD CUSTOMER REQUEST FILE ---
     try:
-        if file_ext == '.csv':
-            df_raw = pd.read_csv(matrix_file, header=None, dtype=str)
+        req_ext = os.path.splitext(request_file.name)[1].lower()
+        if req_ext == '.csv':
+            df_request = pd.read_csv(request_file, dtype=str)
         else:
-            df_raw = pd.read_excel(matrix_file, header=None, dtype=str)
+            df_request = pd.read_excel(request_file, dtype=str)
+        df_request.columns = [str(c).strip() for c in df_request.columns]
     except Exception as e:
-        st.error(f"❌ Error parsing uploaded file: {e}")
+        st.error(f"❌ Error parsing Customer RFQ file: {e}")
         st.stop()
-    
-    # 1. Dynamically locate header row matching your keys
-    header_row_idx = None
-    for idx, row in df_raw.iterrows():
-        row_str = [str(x).lower().strip() for x in row.values]
-        if any(keyword in cell for cell in row_str for keyword in ['part no', 'part_no', 'part number', 'part #', 'item code']):
-            header_row_idx = idx
-            break
-            
-    if header_row_idx is None:
-        st.error("⚠️ Could not detect the header row containing 'Part No.'. Please verify your file structure.")
-    else:
-        raw_headers = df_raw.iloc[header_row_idx].fillna("").astype(str).str.strip().values
-        headers_lower = [h.lower() for h in raw_headers]
-        
-        # Column detection with exact & substring mappings
-        si_idx = next((i for i, h in enumerate(headers_lower) if h in ['si', 's.no', 'sl', 'sl no', 'item', 'item no', 'sr no', 's/n', 's.n']), None)
-        alt_idx = next((i for i, h in enumerate(headers_lower) if any(k in h for k in ['alternate', 'alt', 's/s'])), None)
-        part_idx = next((i for i, h in enumerate(headers_lower) if 'part' in h and i != alt_idx), None)
-        desc_idx = next((i for i, h in enumerate(headers_lower) if 'desc' in h), None)
-        qty_idx = next((i for i, h in enumerate(headers_lower) if 'qty' in h or 'quantity' in h), None)
-        stk_idx = next((i for i, h in enumerate(headers_lower) if any(k in h for k in ['now_available', 'now', 'avail', 'stk', 'stock'])), None)
-        cost_idx = next((i for i, h in enumerate(headers_lower) if any(k in h for k in ['nsp', 'price', 'cost', 'rate'])), None)
-        sup_idx = next((i for i, h in enumerate(headers_lower) if any(k in h for k in ['cust_name', 'sup', 'vendor', 'supplier'])), None)
-        
-        if None in [part_idx, stk_idx, cost_idx]:
-            missing = []
-            if part_idx is None: missing.append("Part No.")
-            if stk_idx is None: missing.append("Now_available / Stock")
-            if cost_idx is None: missing.append("NSP / Price")
-            st.error(f"⚠️ Column matching error. Missing required columns: **{', '.join(missing)}**.")
-            st.info(f"Headers found at row {header_row_idx + 1}: `{list(raw_headers)}`")
+
+    # --- LOAD SUPPLIER MATRIX FILE ---
+    try:
+        mat_ext = os.path.splitext(matrix_file.name)[1].lower()
+        if mat_ext == '.csv':
+            df_matrix = pd.read_csv(matrix_file, dtype=str)
         else:
-            data_df = df_raw.iloc[header_row_idx + 1:].copy()
+            df_matrix = pd.read_excel(matrix_file, dtype=str)
+        df_matrix.columns = [str(c).strip() for c in df_matrix.columns]
+    except Exception as e:
+        st.error(f"❌ Error parsing Supplier Matrix file: {e}")
+        st.stop()
+
+    # --- DETECT COLUMNS IN CUSTOMER REQUEST ---
+    req_cols_lower = {c.lower(): c for c in df_request.columns}
+    req_si_col   = next((req_cols_lower[k] for k in req_cols_lower if k in ['si', 's.no', 'sl', 'serial', 'item no']), None)
+    req_part_col = next((req_cols_lower[k] for k in req_cols_lower if 'part' in k), None)
+    req_qty_col  = next((req_cols_lower[k] for k in req_cols_lower if 'qty' in k or 'quantity' in k), None)
+
+    if not req_part_col:
+        st.error("⚠️ Customer RFQ file must have a 'Part Number' column.")
+        st.stop()
+
+    # --- DETECT COLUMNS IN SUPPLIER MATRIX ---
+    mat_cols_lower = {c.lower(): c for c in df_matrix.columns}
+    mat_si_col   = next((mat_cols_lower[k] for k in mat_cols_lower if k in ['si', 's.no', 'sl', 'serial', 'item no']), None)
+    mat_part_col = next((mat_cols_lower[k] for k in mat_cols_lower if k == 'part'), None) or \
+                   next((mat_cols_lower[k] for k in mat_cols_lower if 'part' in k and 'ord' not in k), None)
+    mat_ord_col  = next((mat_cols_lower[k] for k in mat_cols_lower if 'ord' in k), None)
+    mat_desc_col = next((mat_cols_lower[k] for k in mat_cols_lower if 'desc' in k), None)
+    mat_qty_col  = next((mat_cols_lower[k] for k in mat_cols_lower if 'qty' in k or 'quantity' in k or 'reqd' in k), None)
+    mat_stk_col  = next((mat_cols_lower[k] for k in mat_cols_lower if any(x in k for x in ['ava', 'avl', 'stk', 'stock', 'avail', 'now'])), None)
+    mat_cost_col = next((mat_cols_lower[k] for k in mat_cols_lower if any(x in k for x in ['price', 'cost', 'nsp', 'unit', 'rate', 'amount'])), None)
+    mat_sup_col  = next((mat_cols_lower[k] for k in mat_cols_lower if any(x in k for x in ['sup', 'vendor', 'supplier', 'cust_name'])), None)
+
+    if not mat_part_col or not mat_stk_col or not mat_cost_col:
+        missing_m = []
+        if not mat_part_col: missing_m.append("Part")
+        if not mat_stk_col:  missing_m.append("AVA / Stock")
+        if not mat_cost_col: missing_m.append("UNIT PRICE")
+        st.error(f"⚠️ Supplier Matrix missing required columns: **{', '.join(missing_m)}**")
+        st.info(f"Columns found: `{list(df_matrix.columns)}`")
+        st.stop()
+
+    # --- BUILD CUSTOMER REQUEST LOOKUP: si → {part_number, qty} ---
+    # Key: si (int). Value: {'cust_part': str, 'qty': int}
+    request_lookup = {}   # si_int → {'cust_part': str, 'qty': int}
+    request_order  = []   # ordered list of si values
+
+    for _, rrow in df_request.iterrows():
+        si_raw = clean_numeric(rrow[req_si_col]) if req_si_col else np.nan
+        si_val = int(si_raw) if not np.isnan(si_raw) and si_raw > 0 else None
+        if si_val is None:
+            continue
+        cust_part = clean_part_string(rrow[req_part_col])
+        qty_raw   = clean_numeric(rrow[req_qty_col]) if req_qty_col else np.nan
+        qty_val   = int(qty_raw) if not np.isnan(qty_raw) and qty_raw > 0 else 0
+        if si_val not in request_lookup:
+            request_lookup[si_val] = {'cust_part': cust_part, 'qty': qty_val}
+            request_order.append(si_val)
+
+    # --- BUILD SUPPLIER CATALOG (one entry per si) ---
+    # For each supplier row, check:
+    #   - Normal match:      supplier Part  == customer Part → display as-is
+    #   - Interchange match: supplier Ord Part == customer Part → swap Part ↔ Ord Part
+    catalog = {}       # si_int → catalog dict
+    data_df = df_matrix.copy()   # keep raw matrix for Master Inspector tab
+    winning_row_indices = set()
+
+    for r_idx, row in df_matrix.iterrows():
+        sup_part  = clean_part_string(row[mat_part_col])
+        ord_part  = clean_part_string(row[mat_ord_col]) if mat_ord_col else ""
+        desc_val  = str(row[mat_desc_col]).strip() if mat_desc_col and not pd.isna(row[mat_desc_col]) else ""
+        desc_val  = "" if desc_val.lower() in ['#n/a', 'nan', 'none', 'null', 'no records found'] else desc_val
+
+        # Resolve si from matrix
+        si_raw = clean_numeric(row[mat_si_col]) if mat_si_col else np.nan
+        si_val = int(si_raw) if not np.isnan(si_raw) and si_raw > 0 else None
+        if si_val is None or si_val not in request_lookup:
+            continue
+
+        cust_part = request_lookup[si_val]['cust_part']
+        cust_qty  = request_lookup[si_val]['qty']
+
+        # --- INTERCHANGE LOGIC ---
+        # If customer's part appears in Ord Part → swap so customer part is PART NUMBER
+        norm_cust   = re.sub(r'[^a-zA-Z0-9]', '', cust_part).upper()
+        norm_sup    = re.sub(r'[^a-zA-Z0-9]', '', sup_part).upper()
+        norm_ord    = re.sub(r'[^a-zA-Z0-9]', '', ord_part).upper() if ord_part else ""
+
+        if norm_cust and norm_ord and norm_cust == norm_ord:
+            # Interchange: customer part is in Ord Part column
+            display_part = cust_part       # customer's original part → PART NUMBER
+            display_ss   = sup_part        # supplier's catalog part → S/S
+        else:
+            # Normal: customer part is in Part column (or default)
+            display_part = sup_part
+            display_ss   = ord_part
+
+        stk_raw  = clean_numeric(row[mat_stk_col])
+        stk_val  = int(stk_raw) if not np.isnan(stk_raw) and stk_raw > 0 else 0
+        cost_val = clean_numeric(row[mat_cost_col])
+        supplier = str(row[mat_sup_col]).strip() if mat_sup_col and not pd.isna(row[mat_sup_col]) else "Supplier"
+        supplier = "Supplier" if supplier.lower() in ['#n/a', 'nan', 'none'] else supplier
+
+        if si_val not in catalog:
+            catalog[si_val] = {
+                'part_no':          display_part,
+                'ss':               display_ss,
+                'desc':             desc_val,
+                'max_qty_requested': cust_qty,
+                'options':          []
+            }
+        else:
+            if desc_val and not catalog[si_val]['desc']:
+                catalog[si_val]['desc'] = desc_val
+            if display_ss and not catalog[si_val]['ss']:
+                catalog[si_val]['ss'] = display_ss
+
+        # Record valid supplier options (stock > 0 and cost > 0)
+        if stk_val > 0 and not np.isnan(cost_val) and cost_val > 0:
+            catalog[si_val]['options'].append({
+                'cost':                float(cost_val),
+                'stock':               stk_val,
+                'supplier':            supplier,
+                'original_df_row_idx': r_idx
+            })
+
+    # --- CALCULATE CONSOLIDATED PRICING (in customer request order) ---
+    final_rows = []
+    serial_no  = 1
+    col_unit_price  = f"UNIT PRICE {target_currency}"
+    col_total_price = f"TOTAL PRICE {target_currency}"
+
+    for si_val in request_order:
+        if si_val not in catalog:
+            # Customer requested this si but no supplier row found → show empty row
+            cust_part = request_lookup[si_val]['cust_part']
+            cust_qty  = request_lookup[si_val]['qty']
+            final_rows.append({
+                "SI NO":        si_val,
+                "PART NUMBER":  cust_part,
+                "S/S":          "",
+                "DESCRIPTION":  "",
+                "QTY":          cust_qty,
+                "STK":          0,
+                col_unit_price:  0.0,
+                col_total_price: 0.0
+            })
+            serial_no += 1
+            continue
+
+        item_data  = catalog[si_val]
+        part       = item_data['part_no']
+        ss_part    = item_data['ss']
+        qty_needed = item_data['max_qty_requested']
+        effective_qty = qty_needed if qty_needed > 0 else 1
+
+        # Sort supplier options by lowest cost first
+        sorted_options = sorted(item_data['options'], key=lambda x: x['cost'])
+        if sorted_options:
+            winning_row_indices.add(sorted_options[0]['original_df_row_idx'])
+
+        # Total stock available across all suppliers for this item
+        total_stock_available = sum(opt['stock'] for opt in sorted_options)
+
+        remaining_qty          = effective_qty
+        total_fulfilled_qty    = 0
+        total_blended_cost_pool = 0.0
+        selected_suppliers     = []
+
+        for opt in sorted_options:
+            if remaining_qty <= 0:
+                break
+            take_qty = min(remaining_qty, opt['stock'])
+            if take_qty <= 0:
+                continue
+            total_fulfilled_qty     += take_qty
+            total_blended_cost_pool += (opt['cost'] * take_qty)
+            selected_suppliers.append(f"{opt['supplier']} ({take_qty})")
+            remaining_qty -= take_qty
+
+        final_unit_price  = 0.0
+        final_total_price = 0.0
+
+        if total_fulfilled_qty > 0:
+            avg_unit_cost_aed    = total_blended_cost_pool / total_fulfilled_qty
+            avg_unit_cost_target = avg_unit_cost_aed * conversion_rate
+            selling_price        = avg_unit_cost_target * (1.0 + (margin / 100.0))
+            final_unit_price     = round_up_to_two_decimals(selling_price)
+            final_total_price    = round_up_to_two_decimals(final_unit_price * total_fulfilled_qty)
+
+        final_rows.append({
+            "SI NO":        si_val,
+            "PART NUMBER":  part,
+            "S/S":          ss_part,
+            "DESCRIPTION":  item_data['desc'],
+            "QTY":          qty_needed,
+            "STK":          total_stock_available,
+            col_unit_price:  float(final_unit_price),
+            col_total_price: float(final_total_price)
+        })
+
+    df_quote_raw = pd.DataFrame(final_rows)
+
+    if df_quote_raw.empty:
+        st.warning("⚠️ No valid parts found after matching both files.")
+    else:
+        # --- 7. ULTRA-CLEAN KPI METRIC CARDS ---
+        total_parts = len(df_quote_raw)
+        total_stk_qty = int(df_quote_raw["STK"].sum())
+        total_req_qty = int(df_quote_raw["QTY"].sum())
+        qty_fulfillment_rate = (total_stk_qty / total_req_qty * 100) if total_req_qty > 0 else 0
+        total_val = float(df_quote_raw[col_total_price].sum())
+
+        # Append Grand Total Summary Row
+        total_row = {
+            "SI NO": "TOTAL",
+            "PART NUMBER": "",
+            "S/S": "",
+            "DESCRIPTION": "GRAND TOTAL",
+            "QTY": total_req_qty,
+            "STK": total_stk_qty,
+            col_unit_price: np.nan,
+            col_total_price: round_up_to_two_decimals(total_val)
+        }
+        final_rows.append(total_row)
+        df_quote = pd.DataFrame(final_rows)
+
+        st.markdown(
+            f"""
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-label">📦 Unique Parts Analyzed</div>
+                    <div class="kpi-value">{total_parts}</div>
+                    <div class="kpi-meta">Customer request items matched</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">⚡ Total Availability (AVA)</div>
+                    <div class="kpi-value accent-green">{total_stk_qty:,} <span style="font-size: 1.1rem; color: #64748b; font-weight: 500;">units</span></div>
+                    <div class="kpi-meta">Sum of available stock across suppliers</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">💰 Total Quote Value ({target_currency})</div>
+                    <div class="kpi-value accent-blue">{total_val:,.2f}</div>
+                    <div class="kpi-meta">Markup applied: +{margin}%</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">💱 Currency Mode</div>
+                    <div class="kpi-value">{target_currency}</div>
+                    <div class="kpi-meta">Rate: 1 AED = {conversion_rate:.4f} {target_currency}</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        # --- 8. TABS FOR CLEAN WORKFLOW NAVIGATION ---
+        tab_quote, tab_master = st.tabs(["📊 Consolidated Quote Matrix", "🔍 Master List Inspector (Best Prices Highlighted)"])
+
+        with tab_quote:
+            col_f1, col_f2 = st.columns([2, 1])
+            with col_f1:
+                filter_status = st.radio(
+                    "Filter by Availability:",
+                    ["All Parts", "✅ In Stock Only", "❌ Out of Stock Only"],
+                    horizontal=True
+                )
             
-            # 2. Build Multi-Supplier Catalog Pool (Grouped strictly by Customer Request Line / Normalized Part)
-            catalog = {}
-            for r_idx, row in data_df.iterrows():
-                part = clean_part_string(row.iloc[part_idx])
-                if not part:
+            df_filtered = df_quote.copy()
+            if filter_status == "✅ In Stock Only":
+                df_filtered = df_filtered[df_filtered["STK"] > 0]
+            elif filter_status == "❌ Out of Stock Only":
+                df_filtered = df_filtered[df_filtered["STK"] == 0]
+
+            st.dataframe(
+                df_filtered.style.format({
+                    col_unit_price: "{:,.2f}",
+                    col_total_price: "{:,.2f}"
+                }, na_rep=""),
+                use_container_width=True,
+                height=420
+            )
+
+            st.markdown("#### 💾 Export Client Quotation")
+            col_d1, col_d2 = st.columns(2)
+            
+            csv_bytes = df_quote.to_csv(index=False).encode('utf-8')
+            col_d1.download_button(
+                label="📥 Download Quote as CSV",
+                data=csv_bytes,
+                file_name="Star_City_Quote_Matrix.csv",
+                mime="text/csv",
+                key="btn_download_csv"
+            )
+
+            excel_buffer = io.BytesIO()
+            excel_ready = False
+            for engine_name in ['openpyxl', 'xlsxwriter']:
+                try:
+                    with pd.ExcelWriter(excel_buffer, engine=engine_name) as writer:
+                        df_quote.to_excel(writer, index=False, sheet_name='Quote Matrix')
+                    excel_ready = True
+                    break
+                except Exception:
+                    excel_buffer = io.BytesIO()
                     continue
-                
-                # Check Serial / Item number (e.g. 1 to 147)
-                si_raw = clean_numeric(row.iloc[si_idx]) if si_idx is not None else np.nan
-                si_val = int(si_raw) if not np.isnan(si_raw) and si_raw > 0 else None
-                
-                # Group key: Priority to customer line item 'si' (1 to 147), fallback to normalized alphanumeric part
-                item_key = si_val if si_val is not None else re.sub(r'[^a-zA-Z0-9]', '', part).upper()
-                
-                alt_part = clean_part_string(row.iloc[alt_idx]) if alt_idx is not None else ""
-                
-                desc_val = str(row.iloc[desc_idx]).strip() if desc_idx is not None and not pd.isna(row.iloc[desc_idx]) else ""
-                desc_val = "" if desc_val.lower() in ['#n/a', 'nan', 'none', 'null', 'no records found'] else desc_val
-                
-                qty_raw = clean_numeric(row.iloc[qty_idx]) if qty_idx is not None else 0
-                qty_req = int(qty_raw) if not np.isnan(qty_raw) and qty_raw > 0 else 0
-                
-                supplier = str(row.iloc[sup_idx]).strip() if sup_idx is not None and not pd.isna(row.iloc[sup_idx]) else "Unknown"
-                supplier = "Unknown" if supplier.lower() in ['#n/a', 'nan', 'none'] else supplier
 
-                stk_raw = clean_numeric(row.iloc[stk_idx])
-                stk_val = int(stk_raw) if not np.isnan(stk_raw) and stk_raw > 0 else 0
-                
-                cost_val = clean_numeric(row.iloc[cost_idx])
+            if excel_ready:
+                col_d2.download_button(
+                    label="📥 Download Quote as Excel (.xlsx)",
+                    data=excel_buffer.getvalue(),
+                    file_name="Star_City_Quote_Matrix.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="btn_download_excel"
+                )
+            else:
+                col_d2.info("💡 Note: Run `pip install openpyxl` to enable Excel (.xlsx) downloads.")
 
-                if item_key not in catalog:
-                    catalog[item_key] = {
-                        'part_no': part,
-                        'max_qty_requested': qty_req,
-                        'fallback_ss': alt_part,
-                        'fallback_desc': desc_val,
-                        'options': []
-                    }
-                else:
-                    # Update part name if current one is cleaner or previous was empty
-                    if part and (not catalog[item_key]['part_no'] or catalog[item_key]['part_no'].lower() in ['#n/a', 'nan']):
-                        catalog[item_key]['part_no'] = part
-                    if qty_req > catalog[item_key]['max_qty_requested']:
-                        catalog[item_key]['max_qty_requested'] = qty_req
-                    if alt_part and not catalog[item_key]['fallback_ss']:
-                        catalog[item_key]['fallback_ss'] = alt_part
-                    if desc_val and not catalog[item_key]['fallback_desc']:
-                        catalog[item_key]['fallback_desc'] = desc_val
-
-                # Record valid supplier quotation options (stock > 0 and cost > 0)
-                if stk_val > 0 and not np.isnan(cost_val) and cost_val > 0:
-                    catalog[item_key]['options'].append({
-                        'cost': float(cost_val),
-                        'stock': stk_val,
-                        'supplier': supplier,
-                        'original_df_row_idx': r_idx
-                    })
-
-            # 3. Calculate Consolidated Pricing (Preserving exact 1-147 order)
-            final_rows = []
-            serial_no = 1
-            winning_row_indices = set()
-            
-            # Sort items by customer request order (e.g. 1 to 147)
-            sorted_catalog_items = sorted(
-                catalog.items(), 
-                key=lambda x: (0, x[0]) if isinstance(x[0], int) else (1, str(x[0]))
+        with tab_master:
+            st.markdown(
+                """
+                <p style="font-size: 0.88rem; color: #64748b; margin-bottom: 12px;">
+                    The master list below highlights in <b style="color: #059669;">green</b> the winning supplier rows that offered the lowest available cost for each part.
+                </p>
+                """,
+                unsafe_allow_html=True
             )
             
-            for item_key, item_data in sorted_catalog_items:
-                part = item_data['part_no']
-                qty_needed = item_data['max_qty_requested']
-                effective_qty = qty_needed if qty_needed > 0 else 1
-                
-                # Sort suppliers by lowest cost first
-                sorted_options = sorted(item_data['options'], key=lambda x: x['cost'])
-                
-                if sorted_options:
-                    winning_row_indices.add(sorted_options[0]['original_df_row_idx'])
-                    
-                remaining_qty = effective_qty
-                total_fulfilled_qty = 0
-                total_blended_cost_pool = 0.0
-                selected_suppliers = []
-                
-                for opt in sorted_options:
-                    if remaining_qty <= 0:
-                        break
-                    take_qty = min(remaining_qty, opt['stock'])
-                    if take_qty <= 0:
-                        continue
-                    
-                    total_fulfilled_qty += take_qty
-                    total_blended_cost_pool += (opt['cost'] * take_qty)
-                    selected_suppliers.append(f"{opt['supplier']} ({take_qty})")
-                    remaining_qty -= take_qty
-                    
-                final_unit_price = 0.0
-                final_total_price = 0.0
-                
-                if total_fulfilled_qty > 0:
-                    avg_unit_cost_aed = total_blended_cost_pool / total_fulfilled_qty
-                    # 1. Convert AED Base Cost to Target Currency
-                    avg_unit_cost_target = avg_unit_cost_aed * conversion_rate
-                    # 2. Markup formula: Selling Price = Converted Cost * (1 + Margin%)
-                    selling_price = avg_unit_cost_target * (1.0 + (margin / 100.0))
-                    final_unit_price = round_up_to_two_decimals(selling_price)
-                    final_total_price = round_up_to_two_decimals(final_unit_price * total_fulfilled_qty)
-                    
-                # Fulfillment Status
-                if total_fulfilled_qty == 0:
-                    status_text = "❌ Out of Stock"
-                elif total_fulfilled_qty < qty_needed:
-                    status_text = f"⚠️ Partial ({total_fulfilled_qty}/{qty_needed})"
-                else:
-                    status_text = "✅ In Stock"
+            preview_df = data_df.copy()
+            preview_df.columns = make_columns_unique(list(data_df.columns))
 
-                s_no_display = item_key if isinstance(item_key, int) else serial_no
-                col_unit_price = f"UNIT PRICE {target_currency}"
-                col_total_price = f"TOTAL PRICE {target_currency}"
+            def highlight_winning_rows(row):
+                if row.name in winning_row_indices:
+                    return ['background-color: #dcfce7; color: #166534; font-weight: 600;'] * len(row)
+                return [''] * len(row)
 
-                final_rows.append({
-                    "SI NO": s_no_display,
-                    "PART NUMBER": part,
-                    "S/S": item_data['fallback_ss'] if item_data['fallback_ss'] else "",
-                    "DESCRIPTION": item_data['fallback_desc'],
-                    "QTY": qty_needed,
-                    "STK": total_fulfilled_qty,
-                    col_unit_price: float(final_unit_price),
-                    col_total_price: float(final_total_price)
-                })
-                serial_no += 1
-
-            df_quote = pd.DataFrame(final_rows)
-
-            if df_quote.empty:
-                st.warning("⚠️ No valid parts found in the uploaded file.")
-            else:
-                col_unit_price = f"UNIT PRICE {target_currency}"
-                col_total_price = f"TOTAL PRICE {target_currency}"
-
-                # --- 7. ULTRA-CLEAN KPI METRIC CARDS ---
-                total_parts = len(df_quote)
-                in_stock_parts = len(df_quote[df_quote["STK"] > 0])
-                fulfillment_rate = (in_stock_parts / total_parts * 100) if total_parts > 0 else 0
-                total_val = df_quote[col_total_price].sum()
-
-                st.markdown(
-                    f"""
-                    <div class="kpi-grid">
-                        <div class="kpi-card">
-                            <div class="kpi-label">📦 Unique Parts Analyzed</div>
-                            <div class="kpi-value">{total_parts}</div>
-                            <div class="kpi-meta">Catalog items detected</div>
-                        </div>
-                        <div class="kpi-card">
-                            <div class="kpi-label">⚡ Stock Availability</div>
-                            <div class="kpi-value accent-green">{in_stock_parts} <span style="font-size: 1.1rem; color: #64748b; font-weight: 500;">/ {total_parts}</span></div>
-                            <div class="kpi-meta">{fulfillment_rate:.1f}% fulfillment rate</div>
-                        </div>
-                        <div class="kpi-card">
-                            <div class="kpi-label">💰 Total Quote Value ({target_currency})</div>
-                            <div class="kpi-value accent-blue">{total_val:,.2f}</div>
-                            <div class="kpi-meta">Markup applied: +{margin}%</div>
-                        </div>
-                        <div class="kpi-card">
-                            <div class="kpi-label">💱 Currency Mode</div>
-                            <div class="kpi-value">{target_currency}</div>
-                            <div class="kpi-meta">Rate: 1 AED = {conversion_rate:.4f} {target_currency}</div>
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-
-                # --- 8. TABS FOR CLEAN WORKFLOW NAVIGATION ---
-                tab_quote, tab_master = st.tabs(["📊 Consolidated Quote Matrix", "🔍 Master List Inspector (Best Prices Highlighted)"])
-
-                with tab_quote:
-                    # Filter Controls
-                    col_f1, col_f2 = st.columns([2, 1])
-                    with col_f1:
-                        filter_status = st.radio(
-                            "Filter by Availability:",
-                            ["All Parts", "✅ In Stock Only", "❌ Out of Stock Only"],
-                            horizontal=True
-                        )
-                    
-                    df_filtered = df_quote.copy()
-                    if filter_status == "✅ In Stock Only":
-                        df_filtered = df_filtered[df_filtered["STK"] > 0]
-                    elif filter_status == "❌ Out of Stock Only":
-                        df_filtered = df_filtered[df_filtered["STK"] == 0]
-
-                    st.dataframe(
-                        df_filtered.style.format({
-                            col_unit_price: "{:,.2f}",
-                            col_total_price: "{:,.2f}"
-                        }),
-                        use_container_width=True,
-                        height=420
-                    )
-
-                    # Export Section
-                    st.markdown("#### 💾 Export Client Quotation")
-                    col_d1, col_d2 = st.columns(2)
-                    
-                    csv_bytes = df_quote.to_csv(index=False).encode('utf-8')
-                    col_d1.download_button(
-                        label="📥 Download Quote as CSV",
-                        data=csv_bytes,
-                        file_name="Star_City_Quote_Matrix.csv",
-                        mime="text/csv",
-                        key="btn_download_csv"
-                    )
-
-                    excel_buffer = io.BytesIO()
-                    excel_ready = False
-                    for engine_name in ['openpyxl', 'xlsxwriter']:
-                        try:
-                            with pd.ExcelWriter(excel_buffer, engine=engine_name) as writer:
-                                df_quote.to_excel(writer, index=False, sheet_name='Quote Matrix')
-                            excel_ready = True
-                            break
-                        except Exception:
-                            excel_buffer = io.BytesIO()
-                            continue
-
-                    if excel_ready:
-                        col_d2.download_button(
-                            label="📥 Download Quote as Excel (.xlsx)",
-                            data=excel_buffer.getvalue(),
-                            file_name="Star_City_Quote_Matrix.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            key="btn_download_excel"
-                        )
-                    else:
-                        col_d2.info("💡 Note: Run `pip install openpyxl` to enable Excel (.xlsx) downloads.")
-
-                with tab_master:
-                    st.markdown(
-                        """
-                        <p style="font-size: 0.88rem; color: #64748b; margin-bottom: 12px;">
-                            The master list below highlights in <b style="color: #059669;">green</b> the winning supplier rows that offered the lowest available cost for each part.
-                        </p>
-                        """,
-                        unsafe_allow_html=True
-                    )
-                    
-                    preview_df = data_df.copy()
-                    preview_df.columns = make_columns_unique(raw_headers)
-
-                    def highlight_winning_rows(row):
-                        if row.name in winning_row_indices:
-                            return ['background-color: #dcfce7; color: #166534; font-weight: 600;'] * len(row)
-                        return [''] * len(row)
-
-                    try:
-                        styled_preview = preview_df.head(250).style.apply(highlight_winning_rows, axis=1)
-                        st.dataframe(styled_preview, use_container_width=True, height=450)
-                    except Exception:
-                        st.dataframe(preview_df.head(250), use_container_width=True, height=450)
+            try:
+                styled_preview = preview_df.head(250).style.apply(highlight_winning_rows, axis=1)
+                st.dataframe(styled_preview, use_container_width=True, height=450)
+            except Exception:
+                st.dataframe(preview_df.head(250), use_container_width=True, height=450)
